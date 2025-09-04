@@ -15,13 +15,13 @@ spec:
     spec:
       containers:
         - name: backend
-          image: ghcr.io/devopspankaj77/microshop/backend:__IMAGE_TAG__ # github.sha se replace hoga
+          image: ghcr.io/devopspankaj77/microshop/backend:__IMAGE_TAG__
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
           env:
             - name: MYSQL_HOST
-              value: "mysql"  # service name of mysql
+              value: "mysql"
             - name: MYSQL_USER
               valueFrom:
                 secretKeyRef:
@@ -33,8 +33,10 @@ spec:
                   name: mysql-secret
                   key: MYSQL_PASSWORD
             - name: MYSQL_DB
-              value: "microshop"
-
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: MYSQL_DB
 ---
 apiVersion: v1
 kind: Service
@@ -48,4 +50,4 @@ spec:
     - port: 8080
       targetPort: 8080
   type: ClusterIP
-
+--- 
