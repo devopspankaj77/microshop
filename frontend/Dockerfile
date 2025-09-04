@@ -1,3 +1,4 @@
+# Multi-stage Dockerfile for building and serving a frontend application
 # --- build stage ---
 FROM node:20-alpine AS build
 WORKDIR /app
