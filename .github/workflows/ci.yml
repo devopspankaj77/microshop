@@ -40,6 +40,10 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
+      - name: Kubeconfig
+          run: |
+            mkdir -p ~/.kube
+            echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
       - name: Checkout code
         uses: actions/checkout@v4
 
