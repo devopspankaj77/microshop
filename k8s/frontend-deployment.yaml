@@ -17,13 +17,14 @@ spec:
         - name: ghcr-secret
       containers:
         - name: frontend
-          image: "ghcr.io/devopspankaj77/microshop/frontend:latest"
+          image: "ghcr.io/devopspankaj77/microshop/frontend:__IMAGE_TAG__" # dynamic tag
           imagePullPolicy: Always
           ports:
             - containerPort: 5173
           env:
             - name: VITE_API_URL
               value: "http://backend:8080/api"
+
 ---
 apiVersion: v1
 kind: Service
