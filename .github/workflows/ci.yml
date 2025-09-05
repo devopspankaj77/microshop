@@ -40,10 +40,6 @@ jobs:
     needs: build-and-push
     runs-on: self-hosted
     steps:
-      - name: Kubeconfig
-          run: |
-            mkdir -p ~/.kube
-            echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -52,11 +48,10 @@ jobs:
         with:
           version: v1.30.0
 
-      - name: Kubeconfig
+      - name: Configure kubeconfig
         run: |
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
-
 
       - name: Deploy to Kubernetes
         run: |
@@ -64,6 +59,8 @@ jobs:
           sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" k8s/backend-deployment.yaml
           sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" k8s/frontend-deployment.yaml
 
+          # Apply namespace first
           kubectl apply -f k8s/namespace.yaml
-          kubectl apply -f k8s/
 
+          # Apply all manifests
+          kubectl apply -f k8s/ -n microshop
