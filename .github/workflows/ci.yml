@@ -40,17 +40,17 @@ jobs:
       # Set image tag for deployment
       - name: Set IMAGE_TAG for deployment
         run: echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
-
       # Security scanning with Trivy
       - name: Scan Backend Image
-        uses: aquasecurity/trivy-action@v2
+        uses: aquasecurity/trivy-action@v0.39.0   # latest stable release
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
 
       - name: Scan Frontend Image
-        uses: aquasecurity/trivy-action@v2
+        uses: aquasecurity/trivy-action@v0.39.0   # latest stable release
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
+
 
   deploy:
     needs: build-and-push
