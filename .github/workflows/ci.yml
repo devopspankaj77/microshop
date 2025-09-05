@@ -50,20 +50,20 @@ jobs:
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
 
-      # 📦 Generate SBOM with Syft
+      # 📦 Generate SBOM with Anchore (correct action)
       - name: Generate SBOM for Backend
-        uses: anchore/syft-action@v0.15.0
+        uses: anchore/sbom-action@v0
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
-          output: sbom-backend.json
+          output-file: sbom-backend.json
 
       - name: Generate SBOM for Frontend
-        uses: anchore/syft-action@v0.15.0
+        uses: anchore/sbom-action@v0
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
-          output: sbom-frontend.json
+          output-file: sbom-frontend.json
 
-      # 📂 Save SBOM as artifact (local ya GitHub storage)
+      # 📂 Save SBOM as artifact
       - name: Upload SBOM
         uses: actions/upload-artifact@v4
         with:
