@@ -1,4 +1,4 @@
-name: CI/CD Pipeline for Microshop Deployment
+name: CI/CD Pipeline for Microshop Deployment test
 
 on:
   push:
