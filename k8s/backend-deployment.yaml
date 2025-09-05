@@ -13,20 +13,15 @@ spec:
       labels:
         app: backend
     spec:
-      imagePullSecrets:
-        - name: ghcr-secret
-      
       containers:
-        containers:
         - name: backend
-          image: "ghcr.io/devopspankaj77/microshop/backend:__IMAGE_TAG__"
+          image: ghcr.io/devopspankaj77/microshop/backend:__IMAGE_TAG__
           imagePullPolicy: Always
-
           ports:
             - containerPort: 8080
           env:
             - name: MYSQL_HOST
-              value: "mysql"
+              value: mysql
             - name: MYSQL_USER
               valueFrom:
                 secretKeyRef:
@@ -42,6 +37,9 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: MYSQL_DB
+      imagePullSecrets:
+        - name: ghcr-secret
+
 ---
 apiVersion: v1
 kind: Service
