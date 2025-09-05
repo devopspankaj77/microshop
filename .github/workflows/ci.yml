@@ -12,6 +12,8 @@ env:
 jobs:
   build-and-push:
     runs-on: self-hosted
+    outputs:
+      IMAGE_TAG: ${{ steps.set-tag.outputs.IMAGE_TAG }}
     steps:
       # Checkout code
       - name: Checkout code
@@ -37,24 +39,28 @@ jobs:
           docker build -t $REGISTRY/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }} ./frontend
           docker push $REGISTRY/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
 
-      # Set image tag for deployment
+      # Set image tag for deployment (as job output)
       - name: Set IMAGE_TAG for deployment
-        run: echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
-      # # Security scanning with Trivy
-      # - name: Scan Backend Image
-      #   uses: aquasecurity/trivy-action@v0.33.1  # latest stable release
-      #   with:
-      #     image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
+        id: set-tag
+        run: echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_OUTPUT
 
-      # - name: Scan Frontend Image
-      #   uses: aquasecurity/trivy-action@v0.33.1   # latest stable release
-      #   with:
-      #     image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
+      # Security scanning with Trivy
+      - name: Scan Backend Image
+        uses: aquasecurity/trivy-action@0.18.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
+
+      - name: Scan Frontend Image
+        uses: aquasecurity/trivy-action@0.18.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
 
 
   deploy:
     needs: build-and-push
     runs-on: self-hosted
+    env:
+      IMAGE_TAG: ${{ needs.build-and-push.outputs.IMAGE_TAG }}
     steps:
       # Checkout code
       - name: Checkout code
@@ -72,14 +78,8 @@ jobs:
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
 
-      # Replace __IMAGE_TAG__ in YAMLs with dynamic SHA
-      - name: Update Deployment YAMLs
-        run: |
-          sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" k8s/backend-deployment.yaml
-          sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" k8s/frontend-deployment.yaml
+      # Create namespace first
+      - name: Deploy Namespace
+        run: kubectl apply -f k8s/namespace.yaml
 
-      # Deploy namespace & resources
-      - name: Deploy to Kubernetes
-        run: |
-          kubectl apply -f k8s/namespace.yaml
-          kubectl apply -f k8s/ -n microshop
+      # Replace __IMAGE_TAG__ in YAMLs with_
