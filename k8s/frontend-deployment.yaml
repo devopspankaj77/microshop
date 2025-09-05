@@ -17,7 +17,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: frontend
-          image: "ghcr.io/devopspankaj77/microshop/frontend:__IMAGE_TAG__"
+          image: "ghcr.io/devopspankaj77/microshop/frontend:latest"
           imagePullPolicy: Always
           ports:
             - containerPort: 5173
