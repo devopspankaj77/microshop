@@ -53,14 +53,12 @@ jobs:
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
 
-      - name: Deploy to Kubernetes
+      - name: Update Manifests with Image Tag
         run: |
-          # Replace TAG dynamically in YAML
           sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" k8s/backend-deployment.yaml
           sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" k8s/frontend-deployment.yaml
 
-          # Apply namespace first
+      - name: Deploy to Kubernetes
+        run: |
           kubectl apply -f k8s/namespace.yaml
-
-          # Apply all manifests
           kubectl apply -f k8s/ -n microshop
