@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: ghcr.io/devopspankaj77/microshop/backend:__IMAGE_TAG__
+          image: "ghcr.io/devopspankaj77/microshop/backend:__IMAGE_TAG__"  # FIXED: quotes added
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
@@ -50,4 +50,3 @@ spec:
     - port: 8080
       targetPort: 8080
   type: ClusterIP
---- 
