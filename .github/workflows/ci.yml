@@ -171,15 +171,15 @@ jobs:
   build-and-push:
     runs-on: self-hosted
     outputs:
-      IMAGE_TAG: ${{ steps.set-image-tag.outputs.IMAGE_TAG }}
+      IMAGE_TAG: ${{ steps.set-tag.outputs.IMAGE_TAG }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Set IMAGE_TAG
+      # Set IMAGE_TAG as full Git SHA
       - name: Set IMAGE_TAG
-        id: set-image-tag
-        run: echo "IMAGE_TAG=sha-${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+        id: set-tag
+        run: echo "IMAGE_TAG=${GITHUB_SHA}" >> $GITHUB_OUTPUT
 
       # Login to GHCR
       - name: Log in to GHCR
@@ -189,57 +189,56 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PAT }}
 
-      # Build & Push Backend
-      - name: Build Backend
+      # Build & push backend
+      - name: Build & Push Backend
         run: |
-          docker build -t $REGISTRY/$BACKEND_IMAGE:${{ steps.set-image-tag.outputs.IMAGE_TAG }} ./backend
-          docker push $REGISTRY/$BACKEND_IMAGE:${{ steps.set-image-tag.outputs.IMAGE_TAG }}
+          docker build -t $REGISTRY/$BACKEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }} ./backend
+          docker push $REGISTRY/$BACKEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
 
-      # Build & Push Frontend
-      - name: Build Frontend
+      # Build & push frontend
+      - name: Build & Push Frontend
         run: |
-          docker build -t $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-image-tag.outputs.IMAGE_TAG }} ./frontend
-          docker push $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-image-tag.outputs.IMAGE_TAG }}
+          docker build -t $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }} ./frontend
+          docker push $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
 
-      # Cache Trivy DB
+      # Cache Trivy DB for faster scans
       - name: Cache Trivy DB
         uses: actions/cache@v4
         with:
           path: ~/.cache/trivy
           key: ${{ runner.os }}-trivy-db
 
-      # Trivy Scan Backend
+      # Scan Backend Image
       - name: Scan Backend Image
         uses: aquasecurity/trivy-action@0.18.0
         with:
-          image-ref: $REGISTRY/$BACKEND_IMAGE:${{ steps.set-image-tag.outputs.IMAGE_TAG }}
+          image-ref: $REGISTRY/$BACKEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
           github-pat: ${{ secrets.GHCR_PAT }}
           args: --severity HIGH,CRITICAL --exit-code 0 --scanners vuln
 
-      # Trivy Scan Frontend
+      # Scan Frontend Image
       - name: Scan Frontend Image
         uses: aquasecurity/trivy-action@0.18.0
         with:
-          image-ref: $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-image-tag.outputs.IMAGE_TAG }}
+          image-ref: $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
           github-pat: ${{ secrets.GHCR_PAT }}
           args: --severity HIGH,CRITICAL --exit-code 0 --scanners vuln
 
-      # Generate SBOM Backend
+      # Generate SBOMs
       - name: SBOM Backend
         uses: anchore/sbom-action@v0
         with:
-          image: $REGISTRY/$BACKEND_IMAGE:${{ steps.set-image-tag.outputs.IMAGE_TAG }}
+          image: $REGISTRY/$BACKEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
           output-file: sbom-backend.json
 
-      # Generate SBOM Frontend
       - name: SBOM Frontend
         uses: anchore/sbom-action@v0
         with:
-          image: $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-image-tag.outputs.IMAGE_TAG }}
+          image: $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
           output-file: sbom-frontend.json
 
-      # Upload SBOMs
-      - name: Upload SBOM
+      # Upload SBOM artifacts
+      - name: Upload SBOMs
         uses: actions/upload-artifact@v4
         with:
           name: sbom-reports
@@ -247,37 +246,38 @@ jobs:
             sbom-backend.json
             sbom-frontend.json
 
-  deploy:
-    needs: build-and-push
+  update-manifests:
     runs-on: self-hosted
-    env:
-      IMAGE_TAG: ${{ needs.build-and-push.outputs.IMAGE_TAG }}
+    needs: build-and-push
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v4
-        with:
-          version: v1.30.0
-
-      - name: Configure kubeconfig
-        run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
-
-      # Update deployment YAMLs with new IMAGE_TAG
+      # Replace image tags in Kubernetes YAMLs
       - name: Update Backend Deployment
         run: |
-          sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" k8s/backend-deployment.yaml
+          sed -i "s|image: .*/backend:.*|image: $REGISTRY/$BACKEND_IMAGE:${{ needs.build-and-push.outputs.IMAGE_TAG }}|" k8s/backend-deployment.yaml
 
       - name: Update Frontend Deployment
         run: |
-          sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" k8s/frontend-deployment.yaml
+          sed -i "s|image: .*/frontend:.*|image: $REGISTRY/$FRONTEND_IMAGE:${{ needs.build-and-push.outputs.IMAGE_TAG }}|" k8s/frontend-deployment.yaml
 
-      # Apply Kubernetes resources
-      - name: Deploy to Kubernetes
+      - name: Commit & Push Changes
         run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add k8s/
+          git commit -m "Update images to ${{ needs.build-and-push.outputs.IMAGE_TAG }}" || echo "No changes"
+          git push
+
+  deploy:
+    runs-on: self-hosted
+    needs: update-manifests
+    steps:
+      - name: Deploy to Kubernetes via kubectl
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
           kubectl apply -f k8s/namespace.yaml
           kubectl apply -f k8s/ -n microshop
+
 
