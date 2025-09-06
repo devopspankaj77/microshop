@@ -1,126 +1,113 @@
-name: CI/CD Pipeline for Microshop
+name: CI-CD Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME_BACKEND: devopspankaj77/microshop/backend
-  IMAGE_NAME_FRONTEND: devopspankaj77/microshop/frontend
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+  FRONTEND_IMAGE: microshop/frontend
+  BACKEND_IMAGE: microshop/backend
 
 jobs:
-  build-and-push:
-    runs-on: self-hosted
-    outputs:
-      IMAGE_TAG: ${{ steps.set-tag.outputs.IMAGE_TAG }}
+  build-frontend:
+    name: Build & Push Frontend
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PAT }}
 
-      - name: Build and Push Backend Image
+      - name: Build Frontend Image
         run: |
-          IMAGE_TAG=sha-${GITHUB_SHA::7}
-          docker build -t ghcr.io/devopspankaj77/microshop/backend:${IMAGE_TAG} ./backend
-          docker push ghcr.io/devopspankaj77/microshop/backend:${IMAGE_TAG}
+          docker build -t $REGISTRY/$FRONTEND_IMAGE:${{ github.sha }} ./frontend
 
-
-      - name: Build and Push Frontend Image
+      - name: Push Frontend Image
         run: |
-          IMAGE_TAG=sha-${GITHUB_SHA::7}
-          docker build -t ghcr.io/devopspankaj77/microshop/frontend:${IMAGE_TAG} ./frontend
-          docker push ghcr.io/devopspankaj77/microshop/frontend:${IMAGE_TAG}
+          docker push $REGISTRY/$FRONTEND_IMAGE:${{ github.sha }}
 
+  build-backend:
+    name: Build & Push Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Set IMAGE_TAG for deployment
-        id: set-tag
-        run: echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_OUTPUT
-      
-      # 🔐 Security scanning with Trivy
-
-      - name: Cache Trivy DB
-        uses: actions/cache@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          path: ~/.cache/trivy
-          key: ${{ runner.os }}-trivy-db
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
 
+      - name: Build Backend Image
+        run: |
+          docker build -t $REGISTRY/$BACKEND_IMAGE:${{ github.sha }} ./backend
 
-      - name: Login to GHCR
-        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Push Backend Image
+        run: |
+          docker push $REGISTRY/$BACKEND_IMAGE:${{ github.sha }}
 
-      - name: Scan Backend Image
+  scan-frontend:
+    name: Scan Frontend Image
+    needs: build-frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scan Frontend
         uses: aquasecurity/trivy-action@0.18.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
-          args: --severity HIGH,CRITICAL --scanners vuln
+          image-ref: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
+          args: --severity HIGH,CRITICAL --exit-code 0
 
-      - name: Login to GHCR
-        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: Scan Frontend Image
+  scan-backend:
+    name: Scan Backend Image
+    needs: build-backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scan Backend
         uses: aquasecurity/trivy-action@0.18.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
-          args: --severity HIGH,CRITICAL --scanners vuln
+          image-ref: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
+          args: --severity HIGH,CRITICAL --exit-code 0
 
+  update-manifests:
+    name: Update K8s Manifests
+    needs: [scan-frontend, scan-backend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
+      - name: Update Frontend Image Tag
+        run: |
+          sed -i "s|image: .*/frontend:.*|image: $REGISTRY/$FRONTEND_IMAGE:${{ github.sha }}|" k8s/frontend-deployment.yaml
 
+      - name: Update Backend Image Tag
+        run: |
+          sed -i "s|image: .*/backend:.*|image: $REGISTRY/$BACKEND_IMAGE:${{ github.sha }}|" k8s/backend-deployment.yaml
 
-      # 📦 Generate SBOM with Anchore (correct action)
-      - name: Generate SBOM for Backend
-        uses: anchore/sbom-action@v0
-        with:
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
-          output-file: sbom-backend.json
-
-      - name: Generate SBOM for Frontend
-        uses: anchore/sbom-action@v0
-        with:
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
-          output-file: sbom-frontend.json
-
-      # 📂 Save SBOM as artifact
-      - name: Upload SBOM
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom-reports
-          path: |
-            sbom-backend.json
-            sbom-frontend.json
+      - name: Commit & Push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add k8s/
+          git commit -m "Update images to ${{ github.sha }}"
+          git push
 
   deploy:
-    needs: build-and-push
-    runs-on: self-hosted
-    env:
-      IMAGE_TAG: ${{ needs.build-and-push.outputs.IMAGE_TAG }}
+    name: Deploy via ArgoCD
+    needs: update-manifests
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v4
-        with:
-          version: v1.30.0
-
-      - name: Configure kubeconfig
+      - name: ArgoCD Sync
         run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
-
-      - name: Deploy Namespace
-        run: kubectl apply -f k8s/namespace.yaml
-
-      - name: Update Deployment YAMLs
-        run: |
-          sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" k8s/backend-deployment.yaml
-          sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" k8s/frontend-deployment.yaml
-
-      # - name: Deploy to Kubernetes
-      #   run: kubectl apply -f k8s/ -n microshop --recursive --prune
+          kubectl config set-context --current --namespace=argocd
+          argocd login $ARGOCD_SERVER --username admin --password $ARGOCD_PASSWORD --insecure
+          argocd app sync microshop
