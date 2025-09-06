@@ -12,7 +12,7 @@ env:
 jobs:
   build-frontend:
     name: Build & Push Frontend
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
@@ -26,14 +26,11 @@ jobs:
       - name: Build Frontend Image
         run: |
           docker build -t $REGISTRY/$FRONTEND_IMAGE:${{ github.sha }} ./frontend
-
-      - name: Push Frontend Image
-        run: |
           docker push $REGISTRY/$FRONTEND_IMAGE:${{ github.sha }}
 
   build-backend:
     name: Build & Push Backend
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
@@ -47,41 +44,36 @@ jobs:
       - name: Build Backend Image
         run: |
           docker build -t $REGISTRY/$BACKEND_IMAGE:${{ github.sha }} ./backend
-
-      - name: Push Backend Image
-        run: |
           docker push $REGISTRY/$BACKEND_IMAGE:${{ github.sha }}
 
   scan-frontend:
     name: Scan Frontend Image
     needs: build-frontend
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Scan Frontend
         uses: aquasecurity/trivy-action@0.18.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_PAT }}
-          args: --severity HIGH,CRITICAL --exit-code 0
+          github-pat: ${{ secrets.GHCR_PAT }}
+          args: --severity HIGH,CRITICAL --exit-code 0 --scanners vuln
 
   scan-backend:
     name: Scan Backend Image
     needs: build-backend
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Scan Backend
         uses: aquasecurity/trivy-action@0.18.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_PAT }}
-          args: --severity HIGH,CRITICAL --exit-code 0
+          github-pat: ${{ secrets.GHCR_PAT }}
+          args: --severity HIGH,CRITICAL --exit-code 0 --scanners vuln
 
   update-manifests:
     name: Update K8s Manifests
     needs: [scan-frontend, scan-backend]
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
@@ -98,16 +90,26 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add k8s/
-          git commit -m "Update images to ${{ github.sha }}"
+          git commit -m "Update images to ${{ github.sha }}" || echo "No changes to commit"
           git push
 
-  deploy:
-    name: Deploy via ArgoCD
-    needs: update-manifests
-    runs-on: ubuntu-latest
-    steps:
-      - name: ArgoCD Sync
-        run: |
-          kubectl config set-context --current --namespace=argocd
-          argocd login $ARGOCD_SERVER --username admin --password $ARGOCD_PASSWORD --insecure
-          argocd app sync microshop
+  # deploy:
+  #   name: Deploy via ArgoCD
+  #   needs: update-manifests
+  #   runs-on: self-hosted
+  #   steps:
+  #     - name: Install ArgoCD CLI
+  #       run: |
+  #         curl -sSL -o argocd \
+  #           https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+  #         chmod +x argocd
+  #         sudo mv argocd /usr/local/bin/
+
+  #     - name: ArgoCD Sync
+  #       run: |
+  #         kubectl config set-context --current --namespace=argocd
+  #         argocd login ${{ secrets.ARGOCD_SERVER }} \
+  #           --username admin \
+  #           --password ${{ secrets.ARGOCD_PASSWORD }} \
+  #           --insecure
+  #         argocd app sync microshop
