@@ -56,18 +56,18 @@ jobs:
         uses: aquasecurity/trivy-action@0.18.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_PAT }}
-          args: --severity HIGH,CRITICAL
+          github-pat: ${{ secrets.GHCR_PAT }}
+          args: --severity HIGH,CRITICAL --scanners vuln
+
 
 
       - name: Scan Frontend Image
         uses: aquasecurity/trivy-action@0.18.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_PAT }}
-          args: --severity HIGH,CRITICAL
+          github-pat: ${{ secrets.GHCR_PAT }}
+          args: --severity HIGH,CRITICAL --scanners vuln
+
 
 
       # 📦 Generate SBOM with Anchore (correct action)
