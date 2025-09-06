@@ -212,17 +212,19 @@ jobs:
       - name: Scan Backend Image
         uses: aquasecurity/trivy-action@0.18.0
         with:
-          image-ref: $REGISTRY/$BACKEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
+          image-ref: ghcr.io/${{ github.repository_owner }}/microshop/backend:${{ github.sha }}
           github-pat: ${{ secrets.GHCR_PAT }}
           args: --severity HIGH,CRITICAL --exit-code 0 --scanners vuln
+
 
       # Scan Frontend Image
       - name: Scan Frontend Image
         uses: aquasecurity/trivy-action@0.18.0
         with:
-          image-ref: $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
+          image-ref: ghcr.io/${{ github.repository_owner }}/microshop/frontend:${{ github.sha }}
           github-pat: ${{ secrets.GHCR_PAT }}
           args: --severity HIGH,CRITICAL --exit-code 0 --scanners vuln
+
 
       # Generate SBOMs
       - name: SBOM Backend
