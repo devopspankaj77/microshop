@@ -42,8 +42,16 @@ jobs:
       - name: Set IMAGE_TAG for deployment
         id: set-tag
         run: echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_OUTPUT
-
+      
       # 🔐 Security scanning with Trivy
+
+      - name: Cache Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: ${{ runner.os }}-trivy-db
+
+
       - name: Scan Backend Image
         uses: aquasecurity/trivy-action@0.18.0
         with:
