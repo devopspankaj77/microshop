@@ -25,15 +25,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PAT }}
 
-      - name: Build & Push Backend
+      - name: Build and Push Backend Image
         run: |
-          docker build -t $REGISTRY/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }} ./backend
-          docker push $REGISTRY/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
+          IMAGE_TAG=sha-${GITHUB_SHA::7}
+          docker build -t ghcr.io/devopspankaj77/microshop/backend:${IMAGE_TAG} ./backend
+          docker push ghcr.io/devopspankaj77/microshop/backend:${IMAGE_TAG}
 
-      - name: Build & Push Frontend
+
+      - name: Build and Push Frontend Image
         run: |
-          docker build -t $REGISTRY/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }} ./frontend
-          docker push $REGISTRY/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
+          IMAGE_TAG=sha-${GITHUB_SHA::7}
+          docker build -t ghcr.io/devopspankaj77/microshop/frontend:${IMAGE_TAG} ./frontend
+          docker push ghcr.io/devopspankaj77/microshop/frontend:${IMAGE_TAG}
+
 
       - name: Set IMAGE_TAG for deployment
         id: set-tag

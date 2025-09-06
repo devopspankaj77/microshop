@@ -3,6 +3,10 @@ kind: Deployment
 metadata:
   name: frontend
   namespace: microshop
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: frontend=ghcr.io/devopspankaj77/microshop/frontend
+    argocd-image-updater.argoproj.io/frontend.update-strategy: digest
+    argocd-image-updater.argoproj.io/frontend.allow-tags: regexp:^sha-[0-9a-f]{7}$
 spec:
   replicas: 2
   selector:
@@ -13,28 +17,8 @@ spec:
       labels:
         app: frontend
     spec:
-      imagePullSecrets:
-        - name: ghcr-secret
       containers:
         - name: frontend
-          image: "ghcr.io/devopspankaj77/microshop/frontend:__IMAGE_TAG__" # dynamic tag
-          imagePullPolicy: Always
+          image: ghcr.io/devopspankaj77/microshop/frontend:sha-abcdef1 # placeholder
           ports:
-            - containerPort: 5173
-          env:
-            - name: VITE_API_URL
-              value: "http://backend:8080/api"
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: frontend
-  namespace: microshop
-spec:
-  selector:
-    app: frontend
-  ports:
-    - port: 80
-      targetPort: 5173
-  type: ClusterIP
+            - containerPort: 3000
