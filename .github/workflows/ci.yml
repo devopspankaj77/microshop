@@ -99,5 +99,5 @@ jobs:
           sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" k8s/backend-deployment.yaml
           sed -i "s|__IMAGE_TAG__|${IMAGE_TAG}|g" k8s/frontend-deployment.yaml
 
-      - name: Deploy to Kubernetes
-        run: kubectl apply -f k8s/ -n microshop --recursive --prune
+      # - name: Deploy to Kubernetes
+      #   run: kubectl apply -f k8s/ -n microshop --recursive --prune
