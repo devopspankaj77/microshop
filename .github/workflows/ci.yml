@@ -52,21 +52,37 @@ jobs:
           key: ${{ runner.os }}-trivy-db
 
 
+jobs:
+  backend-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
       - name: Scan Backend Image
         uses: aquasecurity/trivy-action@0.18.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
-          github-pat: ${{ secrets.GHCR_PAT }}
           args: --severity HIGH,CRITICAL --scanners vuln
 
+  frontend-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      - name: Login to GHCR
+        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Scan Frontend Image
         uses: aquasecurity/trivy-action@0.18.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
-          github-pat: ${{ secrets.GHCR_PAT }}
           args: --severity HIGH,CRITICAL --scanners vuln
+
 
 
 
