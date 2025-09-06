@@ -10,14 +10,13 @@ env:
   BACKEND_IMAGE: microshop/backend
 
 jobs:
-  # ---------------- Build & Push Frontend ----------------
+  # ------------------- BUILD FRONTEND -------------------
   build-frontend:
     name: Build & Push Frontend
     runs-on: self-hosted
-    outputs:
-      IMAGE_TAG: ${{ steps.set-tag.outputs.IMAGE_TAG }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -28,43 +27,19 @@ jobs:
 
       - name: Build Frontend Image
         run: |
-          IMAGE_TAG=sha-${GITHUB_SHA::7}
-          docker build -t $REGISTRY/$FRONTEND_IMAGE:$IMAGE_TAG ./frontend
-          docker push $REGISTRY/$FRONTEND_IMAGE:$IMAGE_TAG
+          docker build -t $REGISTRY/$FRONTEND_IMAGE:sha-${GITHUB_SHA::7} ./frontend
 
-      - name: Set IMAGE_TAG for deployment
-        id: set-tag
-        run: echo "IMAGE_TAG=sha-${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+      - name: Push Frontend Image
+        run: |
+          docker push $REGISTRY/$FRONTEND_IMAGE:sha-${GITHUB_SHA::7}
 
-      # --------- Trivy Cache ---------
-      - name: Cache Trivy DB
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/trivy
-          key: ${{ runner.os }}-trivy-db
-
-      # --------- Scan Frontend ---------
-      - name: Scan Frontend Image
-        uses: aquasecurity/trivy-action@0.18.0
-        with:
-          image-ref: $REGISTRY/$FRONTEND_IMAGE:sha-${GITHUB_SHA::7}
-          github-pat: ${{ secrets.GHCR_PAT }}
-          args: --severity HIGH,CRITICAL --exit-code 0 --scanners vuln
-
-      # --------- Generate SBOM ---------
-      - name: Generate SBOM Frontend
-        uses: anchore/sbom-action@v0
-        with:
-          image: $REGISTRY/$FRONTEND_IMAGE:sha-${GITHUB_SHA::7}
-          output-file: sbom-frontend.json
-
-  # ---------------- Build & Push Backend ----------------
+  # ------------------- BUILD BACKEND -------------------
   build-backend:
     name: Build & Push Backend
     runs-on: self-hosted
-    needs: build-frontend
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -75,25 +50,69 @@ jobs:
 
       - name: Build Backend Image
         run: |
-          IMAGE_TAG=sha-${GITHUB_SHA::7}
-          docker build -t $REGISTRY/$BACKEND_IMAGE:$IMAGE_TAG ./backend
-          docker push $REGISTRY/$BACKEND_IMAGE:$IMAGE_TAG
+          docker build -t $REGISTRY/$BACKEND_IMAGE:sha-${GITHUB_SHA::7} ./backend
 
-      - name: Scan Backend Image
+      - name: Push Backend Image
+        run: |
+          docker push $REGISTRY/$BACKEND_IMAGE:sha-${GITHUB_SHA::7}
+
+  # ------------------- TRIVY SCAN FRONTEND -------------------
+  scan-frontend:
+    name: Scan Frontend Image
+    needs: build-frontend
+    runs-on: self-hosted
+    steps:
+      - name: Cache Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: ${{ runner.os }}-trivy-db
+
+      - name: Scan Frontend
         uses: aquasecurity/trivy-action@0.18.0
         with:
-          image-ref: $REGISTRY/$BACKEND_IMAGE:sha-${GITHUB_SHA::7}
+          image-ref: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:sha-${{ github.sha }}
           github-pat: ${{ secrets.GHCR_PAT }}
           args: --severity HIGH,CRITICAL --exit-code 0 --scanners vuln
 
-      - name: Generate SBOM Backend
+  # ------------------- TRIVY SCAN BACKEND -------------------
+  scan-backend:
+    name: Scan Backend Image
+    needs: build-backend
+    runs-on: self-hosted
+    steps:
+      - name: Cache Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: ${{ runner.os }}-trivy-db
+
+      - name: Scan Backend
+        uses: aquasecurity/trivy-action@0.18.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:sha-${{ github.sha }}
+          github-pat: ${{ secrets.GHCR_PAT }}
+          args: --severity HIGH,CRITICAL --exit-code 0 --scanners vuln
+
+  # ------------------- GENERATE SBOM -------------------
+  generate-sbom:
+    name: Generate SBOM
+    needs: [scan-frontend, scan-backend]
+    runs-on: self-hosted
+    steps:
+      - name: Generate SBOM for Frontend
         uses: anchore/sbom-action@v0
         with:
-          image: $REGISTRY/$BACKEND_IMAGE:sha-${GITHUB_SHA::7}
+          image: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:sha-${{ github.sha }}
+          output-file: sbom-frontend.json
+
+      - name: Generate SBOM for Backend
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:sha-${{ github.sha }}
           output-file: sbom-backend.json
 
-      # --------- Upload SBOMs ---------
-      - name: Upload SBOM artifacts
+      - name: Upload SBOM Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: sbom-reports
@@ -101,19 +120,19 @@ jobs:
             sbom-frontend.json
             sbom-backend.json
 
-  # ---------------- Update K8s Manifests ----------------
+  # ------------------- UPDATE K8S MANIFESTS -------------------
   update-manifests:
     name: Update Kubernetes Manifests
+    needs: generate-sbom
     runs-on: self-hosted
-    needs: [build-frontend, build-backend]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Update Frontend Deployment
+      - name: Update Frontend Image Tag
         run: |
           sed -i "s|image: .*/frontend:.*|image: $REGISTRY/$FRONTEND_IMAGE:sha-${GITHUB_SHA::7}|" k8s/frontend-deployment.yaml
 
-      - name: Update Backend Deployment
+      - name: Update Backend Image Tag
         run: |
           sed -i "s|image: .*/backend:.*|image: $REGISTRY/$BACKEND_IMAGE:sha-${GITHUB_SHA::7}|" k8s/backend-deployment.yaml
 
@@ -125,17 +144,13 @@ jobs:
           git commit -m "Update images to sha-${GITHUB_SHA::7}" || echo "No changes to commit"
           git push
 
-  # ---------------- Deploy via ArgoCD ----------------
+  # ------------------- DEPLOY VIA ARGOCD -------------------
   deploy:
     name: Deploy via ArgoCD
-    runs-on: self-hosted
     needs: update-manifests
+    runs-on: self-hosted
     steps:
       - name: ArgoCD Sync
-        env:
-          ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
-          ARGOCD_USERNAME: ${{ secrets.ARGOCD_USERNAME }}
-          ARGOCD_PASSWORD: ${{ secrets.ARGOCD_PASSWORD }}
         run: |
-          argocd login $ARGOCD_SERVER --username $ARGOCD_USERNAME --password $ARGOCD_PASSWORD --insecure
+          argocd login $ARGOCD_SERVER --username admin --password $ARGOCD_PASSWORD --insecure
           argocd app sync microshop
