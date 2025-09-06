@@ -56,11 +56,13 @@ jobs:
         uses: aquasecurity/trivy-action@0.18.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
-
+          args: --severity HIGH,CRITICAL
+          
       - name: Scan Frontend Image
         uses: aquasecurity/trivy-action@0.18.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
+          args: --severity HIGH,CRITICAL
 
       # 📦 Generate SBOM with Anchore (correct action)
       - name: Generate SBOM for Backend
