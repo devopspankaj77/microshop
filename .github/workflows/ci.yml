@@ -1,31 +1,104 @@
-name: CI-CD
+name: CI/CD Pipeline for Microshop
 
 on:
   push:
-    branches:
-      - main
+    branches: ["main"]
+
+permissions:
+  contents: write   # 👈 github-actions[bot] ko repo me commit + push allow karega
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+  FRONTEND_IMAGE: microshop/frontend
+  BACKEND_IMAGE: microshop/backend
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: [backend, frontend]
-
+    runs-on: self-hosted
+    outputs:
+      IMAGE_TAG: ${{ steps.set-tag.outputs.IMAGE_TAG }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
+      # Full Git SHA for image tagging
+      - name: Set IMAGE_TAG
+        id: set-tag
+        run: echo "IMAGE_TAG=${GITHUB_SHA}" >> $GITHUB_OUTPUT
+
+      # Login to GHCR
       - name: Log in to GHCR
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GHCR_PAT }}
 
-      - name: Build and Push Docker Image
+      # Build & push backend image
+      - name: Build & Push Backend
         run: |
-          IMAGE=ghcr.io/${{ github.repository }}/${{ matrix.service }}
-          TAG=sha-$(git rev-parse --short HEAD)
-          docker build -t $IMAGE:$TAG ./services/${{ matrix.service }}
-          docker push $IMAGE:$TAG
+          docker build -t $REGISTRY/$BACKEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }} ./backend
+          docker push $REGISTRY/$BACKEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
+
+      # Build & push frontend image
+      - name: Build & Push Frontend
+        run: |
+          docker build -t $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }} ./frontend
+          docker push $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
+
+      # Cache Trivy DB for faster vulnerability scans
+      - name: Cache Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: ${{ runner.os }}-trivy-db
+
+      # Scan backend image
+      - name: Scan Backend Image
+        uses: aquasecurity/trivy-action@0.18.0
+        with:
+          image-ref: $REGISTRY/$BACKEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
+          github-pat: ${{ secrets.GHCR_PAT }}
+          args: --severity HIGH,CRITICAL --exit-code 0 --scanners vuln
+
+      # Scan frontend image
+      - name: Scan Frontend Image
+        uses: aquasecurity/trivy-action@0.18.0
+        with:
+          image-ref: $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
+          github-pat: ${{ secrets.GHCR_PAT }}
+          args: --severity HIGH,CRITICAL --exit-code 0 --scanners vuln
+
+      # Generate SBOMs
+      - name: Generate Backend SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: $REGISTRY/$BACKEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
+          output-file: sbom-backend.spdx.json
+
+      - name: Generate Frontend SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
+          output-file: sbom-frontend.spdx.json
+
+      # Upload SBOM artifacts
+      - name: Upload SBOMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-reports
+          path: |
+            sbom-backend.spdx.json
+            sbom-frontend.spdx.json
+
+  # ✅ No need to update manifests manually – ArgoCD Image Updater handles it
+  # ArgoCD auto-sync will pick up images based on annotations
+
+  deploy:
+    runs-on: self-hosted
+    needs: build-and-push
+    steps:
+      - name: Ensure ArgoCD App is Synced
+        run: |
+          argocd login $ARGOCD_SERVER --username admin --password $ARGOCD_PASSWORD --insecure
+          argocd app sync microshop --retry
