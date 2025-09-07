@@ -22,19 +22,3 @@ spec:
           image: ghcr.io/devopspankaj77/microshop/backend:sha-abcdef1 # ArgoCD update karega
           ports:
             - containerPort: 8080
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: backend
-  namespace: microshop
-  labels:
-    app: backend
-spec:
-  selector:
-    app: backend   # 👈 ye selector tere backend Deployment ke labels se match hona chahiye
-  ports:
-    - name: http
-      port: 8080        # 👈 ClusterIP pe ye port expose hoga
-      targetPort: 8080  # 👈 Pod ka containerPort jo tu Deployment me diya hai
-  type: ClusterIP
