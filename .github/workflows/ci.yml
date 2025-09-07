@@ -227,17 +227,19 @@ jobs:
 
 
       # Generate SBOMs
-      - name: SBOM Backend
+      - name: Generate Backend SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: $REGISTRY/$BACKEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
-          output-file: sbom-backend.json
+          image: ghcr.io/${{ github.repository_owner }}/microshop/backend:${{ github.sha }}
+          output-file: sbom-backend.spdx.json
 
-      - name: SBOM Frontend
+
+      - name: Generate Frontend SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
-          output-file: sbom-frontend.json
+          image: ghcr.io/${{ github.repository_owner }}/microshop/frontend:${{ github.sha }}
+          output-file: sbom-frontend.spdx.json
+
 
       # Upload SBOM artifacts
       - name: Upload SBOMs
