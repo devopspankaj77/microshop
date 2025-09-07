@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: microshop
+  labels:
+    app: frontend
+spec:
+  selector:
+    app: frontend   # 👈 ye selector frontend Deployment ke labels se match hoga
+  ports:
+    - name: http
+      port: 80          # 👈 Browser se aane wala port
+      targetPort: 80    # 👈 Pod ke containerPort (frontend container expose karta hai 80)
+  type: ClusterIP
