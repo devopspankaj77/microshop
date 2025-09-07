@@ -5,7 +5,7 @@ on:
     branches: ["main"]
 
 permissions:
-  contents: write   # 👈 github-actions[bot] ko repo me commit + push allow karega
+  contents: write   # 👈 ye allow karega github-actions[bot] ko repo me commit/push
 
 env:
   REGISTRY: ghcr.io/${{ github.repository_owner }}
@@ -34,52 +34,53 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PAT }}
 
-      # Build & push backend image
+      # Build & Push Backend
       - name: Build & Push Backend
         run: |
-          docker build -t $REGISTRY/$BACKEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }} ./backend
-          docker push $REGISTRY/$BACKEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
+          docker build -t ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.set-tag.outputs.IMAGE_TAG }} ./backend
+          docker push ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.set-tag.outputs.IMAGE_TAG }}
 
-      # Build & push frontend image
+      # Build & Push Frontend
       - name: Build & Push Frontend
         run: |
-          docker build -t $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }} ./frontend
-          docker push $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
+          docker build -t ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.set-tag.outputs.IMAGE_TAG }} ./frontend
+          docker push ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.set-tag.outputs.IMAGE_TAG }}
 
-      # Cache Trivy DB for faster vulnerability scans
+      # Cache Trivy DB
       - name: Cache Trivy DB
         uses: actions/cache@v4
         with:
           path: ~/.cache/trivy
           key: ${{ runner.os }}-trivy-db
 
-      # Scan backend image
+      # Scan Backend Image
       - name: Scan Backend Image
         uses: aquasecurity/trivy-action@0.18.0
         with:
-          image-ref: $REGISTRY/$BACKEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
+          image-ref: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.set-tag.outputs.IMAGE_TAG }}
           github-pat: ${{ secrets.GHCR_PAT }}
           args: --severity HIGH,CRITICAL --exit-code 0 --scanners vuln
 
-      # Scan frontend image
+      # Scan Frontend Image
       - name: Scan Frontend Image
         uses: aquasecurity/trivy-action@0.18.0
         with:
-          image-ref: $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
+          image-ref: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.set-tag.outputs.IMAGE_TAG }}
           github-pat: ${{ secrets.GHCR_PAT }}
           args: --severity HIGH,CRITICAL --exit-code 0 --scanners vuln
 
-      # Generate SBOMs
+      # Generate Backend SBOM
       - name: Generate Backend SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: $REGISTRY/$BACKEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
+          image: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.set-tag.outputs.IMAGE_TAG }}
           output-file: sbom-backend.spdx.json
 
+      # Generate Frontend SBOM
       - name: Generate Frontend SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
+          image: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.set-tag.outputs.IMAGE_TAG }}
           output-file: sbom-frontend.spdx.json
 
       # Upload SBOM artifacts
@@ -91,14 +92,9 @@ jobs:
             sbom-backend.spdx.json
             sbom-frontend.spdx.json
 
-  # ✅ No need to update manifests manually – ArgoCD Image Updater handles it
-  # ArgoCD auto-sync will pick up images based on annotations
-
-  deploy:
-    runs-on: self-hosted
-    needs: build-and-push
-    steps:
-      - name: Ensure ArgoCD App is Synced
-        run: |
-          argocd login $ARGOCD_SERVER --username admin --password $ARGOCD_PASSWORD --insecure
-          argocd app sync microshop --retry
+# ArgoCD Image Updater handles deployment automatically
+# ✅ No manual kubectl apply needed
+# Just make sure your manifests have annotations like:
+# argocd-image-updater.argoproj.io/image-list
+# argocd-image-updater.argoproj.io/<container>.update-strategy: digest
+# argocd-image-updater.argoproj.io/<container>.allow-tags: regexp:^sha-[0-9a-f]{7}$
