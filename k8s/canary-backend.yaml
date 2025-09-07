@@ -1,0 +1,31 @@
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: backend
+  namespace: microshop
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  service:
+    port: 8080
+    targetPort: 8080
+    gateways:
+      - istio-system/microshop-gateway
+    hosts:
+      - backend.microshop.local
+  analysis:
+    interval: 30s
+    threshold: 5
+    maxWeight: 50
+    stepWeight: 10
+    metrics:
+      - name: request-success-rate
+        thresholdRange:
+          min: 95
+        interval: 1m
+      - name: request-duration
+        thresholdRange:
+          max: 500
+        interval: 1m
