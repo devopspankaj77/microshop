@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: backend
-          # 👇 Initial valid digest daalna hoga (replace with real one from GHCR)
-          image: 👉 Pulling latest image: ghcr.io/devopspankaj77/microshop/backend:main
+          # 👇 Example digest, apna latest yahan daalna
+          image: ghcr.io/devopspankaj77/microshop/backend@sha256:111aaa222bbb333ccc444ddd555eee666fff777ggg888hhh999
           ports:
             - containerPort: 8080
