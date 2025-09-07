@@ -4,9 +4,9 @@ metadata:
   name: frontend
   namespace: microshop
   annotations:
-    # ArgoCD Image Updater config
     argocd-image-updater.argoproj.io/image-list: frontend=ghcr.io/devopspankaj77/microshop/frontend
     argocd-image-updater.argoproj.io/frontend.update-strategy: digest
+    argocd-image-updater.argoproj.io/frontend.allow-tags: regexp:^sha-[0-9a-f]{7,40}$
 spec:
   replicas: 2
   selector:
@@ -17,12 +17,9 @@ spec:
       labels:
         app: frontend
     spec:
-      # Agar private hoti to secret use karna padta, abhi public hai to comment rehne do
-      # imagePullSecrets:
-      #   - name: ghcr-secret
       containers:
         - name: frontend
-          # 👇 Yahan ab tag ki jagah digest use hoga (ArgoCD Image Updater fill karega)
-          image: ghcr.io/devopspankaj77/microshop/frontend@sha256:dummy
+          # 👇 Initial valid digest daalna hoga (replace with real one from GHCR)
+          image: 👉 Pulling latest image: ghcr.io/devopspankaj77/microshop/frontend:main
           ports:
             - containerPort: 3000

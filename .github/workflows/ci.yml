@@ -5,7 +5,7 @@ on:
     branches: ["main"]
 
 permissions:
-  contents: write   # 👈 ye allow karega github-actions[bot] ko repo me commit/push
+  contents: write
 
 env:
   REGISTRY: ghcr.io/${{ github.repository_owner }}
@@ -14,19 +14,17 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     outputs:
       IMAGE_TAG: ${{ steps.set-tag.outputs.IMAGE_TAG }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Full Git SHA for image tagging
       - name: Set IMAGE_TAG
         id: set-tag
         run: echo "IMAGE_TAG=${GITHUB_SHA}" >> $GITHUB_OUTPUT
 
-      # Login to GHCR
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -34,19 +32,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PAT }}
 
-      # Build & Push Backend
       - name: Build & Push Backend
         run: |
           docker build -t ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.set-tag.outputs.IMAGE_TAG }} ./backend
           docker push ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.set-tag.outputs.IMAGE_TAG }}
 
-      # Build & Push Frontend
       - name: Build & Push Frontend
         run: |
           docker build -t ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.set-tag.outputs.IMAGE_TAG }} ./frontend
           docker push ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.set-tag.outputs.IMAGE_TAG }}
 
-      # Cache Trivy DB
+      # Trivy DB Cache
       - name: Cache Trivy DB
         uses: actions/cache@v4
         with:
@@ -55,9 +51,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-trivy-db-
 
-          
-
-      # Scan Backend Image
       - name: Scan Backend Image
         uses: aquasecurity/trivy-action@0.18.0
         with:
@@ -65,7 +58,6 @@ jobs:
           github-pat: ${{ secrets.GHCR_PAT }}
           args: --severity HIGH,CRITICAL --exit-code 0 --scanners vuln
 
-      # Scan Frontend Image
       - name: Scan Frontend Image
         uses: aquasecurity/trivy-action@0.18.0
         with:
@@ -73,21 +65,18 @@ jobs:
           github-pat: ${{ secrets.GHCR_PAT }}
           args: --severity HIGH,CRITICAL --exit-code 0 --scanners vuln
 
-      # Generate Backend SBOM
       - name: Generate Backend SBOM
         uses: anchore/sbom-action@v0
         with:
           image: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.set-tag.outputs.IMAGE_TAG }}
           output-file: sbom-backend.spdx.json
 
-      # Generate Frontend SBOM
       - name: Generate Frontend SBOM
         uses: anchore/sbom-action@v0
         with:
           image: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.set-tag.outputs.IMAGE_TAG }}
           output-file: sbom-frontend.spdx.json
 
-      # Upload SBOM artifacts
       - name: Upload SBOMs
         uses: actions/upload-artifact@v4
         with:
@@ -95,10 +84,3 @@ jobs:
           path: |
             sbom-backend.spdx.json
             sbom-frontend.spdx.json
-
-# ArgoCD Image Updater handles deployment automatically
-# ✅ No manual kubectl apply needed
-# Just make sure your manifests have annotations like:
-# argocd-image-updater.argoproj.io/image-list
-# argocd-image-updater.argoproj.io/<container>.update-strategy: digest
-# argocd-image-updater.argoproj.io/<container>.allow-tags: regexp:^sha-[0-9a-f]{7}$
