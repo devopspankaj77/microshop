@@ -161,6 +161,8 @@ name: CI/CD Pipeline for Microshop
 on:
   push:
     branches: ["main"]
+permissions:
+  contents: write   # 👈 ye add karo Ye github-actions[bot] ko allow karega ki wo repo me commit + push kare.
 
 env:
   REGISTRY: ghcr.io/${{ github.repository_owner }}
