@@ -4,9 +4,6 @@ metadata:
   name: frontend
   namespace: microshop
 spec:
-  provider:
-    type: prometheus
-    address: http://prometheus-operator.default:8080
   targetRef:
     apiVersion: apps/v1
     kind: Deployment
@@ -14,20 +11,25 @@ spec:
   service:
     port: 3000
     gateways:
-      - microshop-gateway
+    - microshop-gateway.istio-system.svc.cluster.local
     hosts:
-      - microshop.local
+    - microshop.local
   analysis:
     interval: 1m
     threshold: 5
     maxWeight: 50
     stepWeight: 10
     metrics:
-      - name: request-success-rate
-        thresholdRange:
-          min: 99
-        interval: 30s
-      - name: request-duration
-        thresholdRange:
-          max: 500
-        interval: 30s
+    - name: request-success-rate
+      thresholdRange:
+        min: 99
+      interval: 1m
+    - name: request-duration
+      thresholdRange:
+        max: 500
+      interval: 1m
+    webhooks:
+    - name: load-test
+      type: pre-rollout
+      url: http://flagger-loadtester.microshop/
+      timeout: 5s
