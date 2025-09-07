@@ -17,8 +17,8 @@ spec:
       labels:
         app: backend
     spec:
-      imagePullSecrets:
-        - name: ghcr-secret
+      # imagePullSecrets:
+      #   - name: ghcr-secret
       containers:
         - name: backend
           image: ghcr.io/devopspankaj77/microshop/backend:sha-abcdef1
