@@ -2,30 +2,27 @@ name: CI-CD
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: devopspankaj77/microshop
+permissions:
+  contents: read
+  packages: write   # 👈 Added
 
 jobs:
   build:
-    runs-on: self-hosted   # 👈 Self-hosted runner use hoga
+    runs-on: self-hosted
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Login to GHCR
-        run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Build & Push Backend
         run: |
-          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ github.run_number }} ./backend
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ github.run_number }}
+          docker build -t ghcr.io/${{ github.repository_owner }}/microshop/backend:${{ github.run_number }} ./backend
+          docker push ghcr.io/${{ github.repository_owner }}/microshop/backend:${{ github.run_number }}
 
       - name: Build & Push Frontend
         run: |
-          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ github.run_number }} ./frontend
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ github.run_number }}
+          docker build -t ghcr.io/${{ github.repository_owner }}/microshop/frontend:${{ github.run_number }} ./frontend
+          docker push ghcr.io/${{ github.repository_owner }}/microshop/frontend:${{ github.run_number }}
