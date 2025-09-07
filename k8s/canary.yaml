@@ -1,0 +1,31 @@
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: backend
+  namespace: microshop
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend   # 👈 deployment ka naam
+  service:
+    port: 80
+    gateways:
+    - microshop-gateway
+    hosts:
+    - microshop.local
+  analysis:
+    interval: 1m
+    threshold: 5
+    maxWeight: 50
+    stepWeight: 10
+    metrics:
+    - name: request-success-rate
+      thresholdRange:
+        min: 99
+      interval: 1m
+    - name: request-duration
+      thresholdRange:
+        max: 500
+      interval: 1m
+
