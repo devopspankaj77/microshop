@@ -20,6 +20,6 @@ spec:
       containers:
         - name: frontend
           # 👇 Initial valid digest daalna hoga (replace with real one from GHCR)
-          image: 👉 Pulling latest image: ghcr.io/devopspankaj77/microshop/frontend:main
+          image: ghcr.io/devopspankaj77/microshop/frontend:78
           ports:
             - containerPort: 3000
