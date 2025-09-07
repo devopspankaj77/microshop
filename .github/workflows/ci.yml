@@ -155,14 +155,14 @@
 #           argocd login $ARGOCD_SERVER --username admin --password $ARGOCD_PASSWORD --insecure
 #           argocd app sync microshop
 
-
 name: CI/CD Pipeline for Microshop
 
 on:
   push:
     branches: ["main"]
+
 permissions:
-  contents: write   # 👈 ye add karo Ye github-actions[bot] ko allow karega ki wo repo me commit + push kare.
+  contents: write   # github-actions[bot] ko repo me push karne ka right de raha hai
 
 env:
   REGISTRY: ghcr.io/${{ github.repository_owner }}
@@ -214,34 +214,30 @@ jobs:
       - name: Scan Backend Image
         uses: aquasecurity/trivy-action@0.18.0
         with:
-          image-ref: ghcr.io/${{ github.repository_owner }}/microshop/backend:${{ github.sha }}
+          image-ref: $REGISTRY/$BACKEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
           github-pat: ${{ secrets.GHCR_PAT }}
           args: --severity HIGH,CRITICAL --exit-code 0 --scanners vuln
-
 
       # Scan Frontend Image
       - name: Scan Frontend Image
         uses: aquasecurity/trivy-action@0.18.0
         with:
-          image-ref: ghcr.io/${{ github.repository_owner }}/microshop/frontend:${{ github.sha }}
+          image-ref: $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
           github-pat: ${{ secrets.GHCR_PAT }}
           args: --severity HIGH,CRITICAL --exit-code 0 --scanners vuln
-
 
       # Generate SBOMs
       - name: Generate Backend SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ghcr.io/${{ github.repository_owner }}/microshop/backend:${{ github.sha }}
-          output-file: sbom-backend.spdx.json
-
+          image: $REGISTRY/$BACKEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
+          output-file: sbom-backend.json
 
       - name: Generate Frontend SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ghcr.io/${{ github.repository_owner }}/microshop/frontend:${{ github.sha }}
-          output-file: sbom-frontend.spdx.json
-
+          image: $REGISTRY/$FRONTEND_IMAGE:${{ steps.set-tag.outputs.IMAGE_TAG }}
+          output-file: sbom-frontend.json
 
       # Upload SBOM artifacts
       - name: Upload SBOMs
@@ -274,16 +270,6 @@ jobs:
           git add k8s/
           git commit -m "Update images to ${{ needs.build-and-push.outputs.IMAGE_TAG }}" || echo "No changes"
           git push
-
-  deploy:
-    runs-on: self-hosted
-    needs: update-manifests
-    steps:
-      - name: Deploy to Kubernetes via kubectl
-        run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
-          kubectl apply -f k8s/namespace.yaml
-          kubectl apply -f k8s/ -n microshop
-
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
