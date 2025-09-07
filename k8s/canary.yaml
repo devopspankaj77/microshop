@@ -4,6 +4,9 @@ metadata:
   name: frontend
   namespace: microshop
 spec:
+  provider:
+    type: prometheus
+    address: http://prometheus-operator.default:8080
   targetRef:
     apiVersion: apps/v1
     kind: Deployment
