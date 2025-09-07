@@ -6,7 +6,7 @@ metadata:
   annotations:
     argocd-image-updater.argoproj.io/image-list: frontend=ghcr.io/devopspankaj77/microshop/frontend
     argocd-image-updater.argoproj.io/frontend.update-strategy: digest
-    argocd-image-updater.argoproj.io/frontend.allow-tags: regexp:^sha-[0-9a-f]{7}$
+    argocd-image-updater.argoproj.io/frontend.allow-tags: regexp:^sha-[0-9a-f]{7,40}$
 spec:
   replicas: 2
   selector:
@@ -17,9 +17,10 @@ spec:
       labels:
         app: frontend
     spec:
+      imagePullSecrets:
+        - name: ghcr-secret
       containers:
         - name: frontend
-          image: ghcr.io/devopspankaj77/microshop/frontend:sha-abcdef1 # placeholder
+          image: ghcr.io/devopspankaj77/microshop/frontend:sha-abcdef1
           ports:
             - containerPort: 3000
----

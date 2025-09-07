@@ -6,7 +6,7 @@ metadata:
   annotations:
     argocd-image-updater.argoproj.io/image-list: backend=ghcr.io/devopspankaj77/microshop/backend
     argocd-image-updater.argoproj.io/backend.update-strategy: digest
-    argocd-image-updater.argoproj.io/backend.allow-tags: regexp:^sha-[0-9a-f]{7}$
+    argocd-image-updater.argoproj.io/backend.allow-tags: regexp:^sha-[0-9a-f]{7,40}$
 spec:
   replicas: 2
   selector:
@@ -17,8 +17,10 @@ spec:
       labels:
         app: backend
     spec:
+      imagePullSecrets:
+        - name: ghcr-secret
       containers:
         - name: backend
-          image: ghcr.io/devopspankaj77/microshop/backend:sha-abcdef1 # ArgoCD update karega
+          image: ghcr.io/devopspankaj77/microshop/backend:sha-abcdef1
           ports:
             - containerPort: 8080
