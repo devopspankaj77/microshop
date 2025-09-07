@@ -51,7 +51,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/trivy
-          key: ${{ runner.os }}-trivy-db
+          key: ${{ runner.os }}-trivy-db-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-trivy-db-
+
+          
 
       # Scan Backend Image
       - name: Scan Backend Image
