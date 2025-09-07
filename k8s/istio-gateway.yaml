@@ -5,7 +5,7 @@ metadata:
   namespace: microshop
 spec:
   selector:
-    istio: ingressgateway # Istio ka ingress gateway controller
+    istio: ingressgateway # Istio ka ingress gateway controller 
   servers:
     - port:
         number: 80
