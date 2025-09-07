@@ -1,0 +1,15 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: microshop-gateway
+  namespace: microshop
+spec:
+  selector:
+    istio: ingressgateway # Istio ka ingress gateway controller
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "microshop.local"
